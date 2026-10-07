@@ -1,0 +1,12 @@
+# Bazel build artifacts
+bazel-*
+.bazelrc.user
+
+# Editor configs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
