@@ -1,0 +1,24 @@
+# Bazel registry configuration
+common --registry=https://raw.githubusercontent.com/eclipse-score/bazel_registry/main/
+common --registry=https://bcr.bazel.build
+
+# Shared configuration for simple build execution
+common --experimental_isolated_extension_usages
+build:shared --incompatible_strict_action_env
+build:shared --sandbox_writable_path=/var/tmp
+build:shared --host_platform=@score_bazel_platforms//:x86_64-linux
+
+# -------------------------------------------------------------------------------
+# Config dedicated to host platform CPU:x86_64 and OS:Linux
+# -------------------------------------------------------------------------------
+build:x86_64-linux --config=shared
+build:x86_64-linux --platforms=@score_bazel_platforms//:x86_64-linux-gcc_12.2.0-posix
+build:x86_64-linux --extra_toolchains=@score_gcc_x86_64_toolchain//:x86_64-linux-gcc_12.2.0
+build:x86_64-linux --features=use_pthread
+
+# -------------------------------------------------------------------------------
+# Config dedicated to target platform CPU:aarch64 and OS:Linux
+# -------------------------------------------------------------------------------
+build:aarch64-linux --config=shared
+build:aarch64-linux --platforms=@score_bazel_platforms//:aarch64-linux-gcc_12.2.0-posix
+build:aarch64-linux --extra_toolchains=@score_gcc_aarch64_toolchain//:aarch64-linux-gcc_12.2.0

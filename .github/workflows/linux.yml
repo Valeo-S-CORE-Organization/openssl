@@ -1,0 +1,42 @@
+# *******************************************************************************
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+# *******************************************************************************
+
+name: Build (Linux)
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  merge_group:
+    types: [checks_requested]
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  builds:
+    name: Build (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x86_64
+            bazel-target: "build //... --config=x86_64-linux"
+            upload-name: "NO UPLOAD OF TEST RESULTS CONFIGURED"
+          - name: Linux aarch64
+            bazel-target: "build //... --config=aarch64-linux"
+            upload-name: "NO UPLOAD OF TEST RESULTS CONFIGURED"
+    uses: eclipse-score/cicd-workflows/.github/workflows/tests.yml@d31fdc0ba74985a71acbfa1e994fd45e2bbc5fad
+    with:
+      bazel-target: ${{ matrix.bazel-target }}
+      upload-name: ${{ matrix.upload-name }}
