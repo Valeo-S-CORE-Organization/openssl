@@ -1,0 +1,40 @@
+{
+    "name": "eclipse-s-core",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "args": {
+            "USERNAME": "${localEnv:USER}"
+        }
+    },
+    "remoteUser": "${localEnv:USER}",
+    "containerUser": "${localEnv:USER}",
+
+    // Create empty folder in case mandatory mount points are missing.
+    "initializeCommand": "mkdir -p ${localEnv:HOME}/.cache/bazel ${localEnv:HOME}/.qnx/license",
+
+    "mounts": [
+        {
+            "source": "${localEnv:HOME}/.cache/bazel",
+            "target": "/home/${localEnv:USER}/.cache/bazel",
+            "type": "bind"
+        },
+        {
+            "source": "${localEnv:HOME}/.netrc",
+            "target": "/home/${localEnv:USER}/.netrc",
+            "type": "bind"
+        },
+        {
+            "source": "${localEnv:HOME}/.qnx/license",
+            "target": "/opt/score_qnx/license",
+            "type": "bind"
+        },
+        {
+            "source": "/usr/local/share/ca-certificates/",
+            "target": "/usr/local/share/ca-certificates/",
+            "type": "bind"
+        }
+    ],
+    "onCreateCommand": {
+        "update certificates": "sudo apt update && sudo apt install -y --no-install-recommends ca-certificates-java openjdk-17-jre-headless && sudo update-ca-certificates"
+    }
+}
