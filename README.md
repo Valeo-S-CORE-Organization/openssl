@@ -8,7 +8,7 @@ This dedicated Bazel repository handles the download, isolation, and hermetic co
 
 In a centralized Bazel workspace setup, the `@score_crates` repository serves as the single registry for Rust packages and FFI bindings.
 
-Compiling Rust FFI bindings (such as `openssl-sys` inside `@score_crates`) requires linking against compiled C++ OpenSSL shared binaries. Hosting OpenSSL build logic inside `score_crypto` or `@score_baselibs` introduces circular module-level dependencies:
+Compiling Rust FFI bindings (such as `openssl-sys` inside `@score_crates`) requires linking against compiled C++ OpenSSL binaries. Hosting OpenSSL build logic inside `score_crypto` or `@score_baselibs` introduces circular module-level dependencies:
 
 ### Hosting OpenSSL in `score_crypto`:
 `score_crypto` depends on `@score_crates` to fetch Rust dependencies (`libc`, `serde`, `parking_lot`). If `@score_crates` also depends on `score_crypto` to resolve C++ OpenSSL targets for `openssl-sys`, a circular module relationship is created:
@@ -54,7 +54,7 @@ Extracting OpenSSL compilation into a standalone leaf-node module (`@score_opens
  └─────────────┬─────────────┘             └───────────────────────────┘
                │                                         │
                └─────────────────────────────────────────┘
-          (@score_crates links down to @score_openssl//:openssl_shared)
+          (@score_crates links down to @score_openssl//:openssl_link)
 ```
 
 ### Key Architectural Benefits:
@@ -79,3 +79,20 @@ Extracting OpenSSL compilation into a standalone leaf-node module (`@score_opens
 *   **Status / Exploration Alternative**: This is currently under investigation as a platform-specific alternative for QNX targets. However, because QNX SDP binaries only support QNX execution and do not provide Linux host/target capabilities, compiling from the source tarball remains our primary unified baseline to guarantee identical, deterministic feature configurations (`OPENSSL_NO_*` gates) and perfect FFI contract matching across both Linux and QNX.
 
 *(Note: If the platform strategy later transitions to standardized OS/BCR modules across all target platforms, `@score_openssl` can be evaluated for consolidation into `@score_crates`.)*
+
+## 4. Linking Architecture (DR-002 Compliance)
+
+According to [DR-002](https://eclipse-score.github.io/score/main/design_decisions/architecture/DR-002-arch.html), the default delivery model for libraries across S-CORE is **static linking** to guarantee deterministic binary deployment and safety in automotive targets:
+
+* **`:openssl` (Default)**: Static `cc_library` linking `libcrypto.a` and `libssl.a`.
+* **`:openssl_shared` (Opt-in)**: Dynamic `cc_shared_library` producing `libopenssl.so.3`.
+* **`:openssl_shared_import`**: Adapter for `rules_rust` FFI linking.
+* **`:openssl_link` (Public Switchboard)**: The primary entry point consumed by downstream projects (`@score_crates`, `score_crypto`, `score_baselibs`). It selects between static and dynamic linking based on the `use_dynamic_openssl` flag:
+
+```bash
+# Default: Static linking (honors DR-002)
+bazel build //...
+
+# Opt-in: Shared linking (requires alignment across all downstream modules)
+bazel build --//:use_dynamic_openssl=True //...
+```

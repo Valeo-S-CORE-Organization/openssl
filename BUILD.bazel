@@ -11,7 +11,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+load("@rules_cc//cc:defs.bzl", "cc_import", "cc_library", "cc_shared_library")
 load("@rules_foreign_cc//foreign_cc:defs.bzl", "configure_make")
 
 # config settings for selecting on OS + CPU combinations
@@ -48,14 +49,13 @@ configure_make(
     configure_command = "Configure",  # OpenSSL uses Configure, not configure
     configure_in_place = False,  # Avoid path conflicts with QCC
     configure_options = select({
-        ":is_qnx_aarch64": ["qnx-aarch64"],  #Patched openssl main.conf
-        ":is_qnx_x86_64": ["qnx-x86_64"],  #Patched openssl main.conf
+        ":is_qnx_aarch64": ["qnx-aarch64"],  # Patched openssl main.conf
+        ":is_qnx_x86_64": ["qnx-x86_64"],    # Patched openssl main.conf
         ":is_linux_aarch64": ["linux-aarch64"],
         "//conditions:default": [],
     }) + [
-        "shared",  # Build shared libraries (libcrypto.so, libssl.so)
+        # Note: shared and no-shared are intentionally omitted to build both static and shared libraries
         "no-asm",  # Disable assembly optimizations to avoid GCC inline assembly issues
-        "no-threads",  # Disable threading to avoid pthread requirement on QNX
         "no-makedepend",  # Disable dependency generation that causes QCC issues
         "no-sock",  # Disable socket/network BIO (not needed for a crypto library; avoids missing socket APIs in QNX sysroot)
         # Note: ENGINE API kept enabled for SoftHSM compatibility (ENGINE is deprecated in OpenSSL 3.x but still functional)
@@ -88,15 +88,19 @@ configure_make(
         "no-md4",  # Disable MD4 (obsolete)
         "no-mdc2",  # Disable MDC2 (obsolete)
         "no-rc2",  # Disable RC2 (insecure, vulnerable key schedule)
-        "no-rc4",  # Disable RC4 (insecure, broken stream cipher)
-        "no-rc5",  # Disable RC5 (legacy, not in SCORE requirements)
-        "no-idea",  # Disable IDEA cipher (legacy, not in SCORE requirements)
-        "no-seed",  # Disable SEED cipher (legacy, not in SCORE requirements)
-        "no-cast",  # Disable CAST cipher (legacy, not in SCORE requirements)
-        "no-bf",  # Disable Blowfish (legacy, not in SCORE requirements)
-        "no-camellia",  # Disable Camellia cipher (not in SCORE requirements)
+        "no-rc4",  # Disable RC4 (broken stream cipher)
+        "no-rc5",  # Disable RC5 (patented/legacy)
+        "no-idea",  # Disable IDEA (legacy)
+        "no-bf",  # Disable Blowfish (legacy, superseded by AES)
+        "no-cast",  # Disable CAST (legacy)
+        "no-seed",  # Disable SEED (Korean standard, not in SCORE requirements)
+        "no-sm2",  # Disable SM2 (Chinese national standard, not in SCORE requirements)
+        "no-sm3",  # Disable SM3 (Chinese national standard, not in SCORE requirements)
+        "no-sm4",  # Disable SM4 (Chinese national standard, not in SCORE requirements)
+        "no-camellia",  # Disable Camellia (not in SCORE requirements; AES is primary)
         "no-aria",  # Disable ARIA cipher (not in SCORE requirements)
-        "no-whirlpool",  # Disable Whirlpool hash (not in SCORE requirements)
+        "no-rmd160",  # Disable RIPEMD-160 (legacy hash)
+        "no-whirlpool",  # Disable Whirlpool (legacy hash)
 
         # Build Scope Reduction - Regional/Specialized Algorithms (not in SCORE requirements)
         "no-sm2",  # Disable SM2 (Chinese national standard elliptic curve algorithm)
@@ -106,15 +110,19 @@ configure_make(
         "no-afalgeng",  # Disable Linux AF_ALG engine (requires linux/version.h, not available in QNX sysroot)
         "no-padlockeng",  # Disable VIA Padlock engine (x86-only, irrelevant for aarch64/QNX targets)
         "no-legacy",  # Disable legacy provider (only default provider used)
-        "no-async",  # Disable async dispatch (unused, especially with no-threads)
+        "no-async",  # Disable async dispatch (unused)
         "-DUSE_TIMEGM",  # QNX doesn't provide the 'timezone' global variable
+
+        "shared",  # Builds both static (.a) and shared (.so) libraries
         "--prefix=$${INSTALLDIR}",
         "--openssldir=$${INSTALLDIR}",
         "--libdir=lib",
+
+        # Note: DES is intentionally kept enabled for SoftHSM compatibility (3DES / CKM_DES3_CBC)
+        # Note: MD5 is intentionally kept enabled for SoftHSM and TLS PRF compatibility
     ],
     env = select({
         ":is_qnx_aarch64": {
-            # Override toolchain paths to use absolute paths instead of /proc/self/cwd
             "QNX_HOST": "$${PWD}/external/score_bazel_cpp_toolchains++gcc+score_qcc_aarch64_toolchain_pkg/host/linux/x86_64",
             "QNX_TARGET": "$${PWD}/external/score_bazel_cpp_toolchains++gcc+score_qcc_aarch64_toolchain_pkg/target/qnx",
         },
@@ -127,6 +135,10 @@ configure_make(
     lib_source = "@openssl_source//:all",
     out_include_dir = "include",
     out_lib_dir = "lib",
+    out_static_libs = [
+        "libcrypto.a",
+        "libssl.a",
+    ],
     out_shared_libs = [
         "libcrypto.so",
         "libcrypto.so.3",
@@ -143,41 +155,51 @@ configure_make(
     ],
 )
 
+# -------------------------------------------------------------------------------
+# Opt-in dynamic linking flag (Default: Static per S-CORE DR-002)
+# -------------------------------------------------------------------------------
+bool_flag(
+    name = "use_dynamic_openssl",
+    build_setting_default = False,  # static by default, per DR-002
+)
+
+config_setting(
+    name = "dynamic_openssl_enabled",
+    flag_values = {":use_dynamic_openssl": "True"},
+)
+
+# Default target: static cc_library per DR-002
 cc_library(
-    name = "openssl_shared",
-    linkstatic = False,
+    name = "openssl",
     visibility = ["//visibility:public"],
     deps = [":openssl_make"],
 )
 
-# Extract the versioned .so files from the cmake output so they can be used
-# as plain data files in runfiles (e.g. py_itf_test copying into Docker).
-# cc_library (openssl) handles compile-time headers and dynamic linking;
-# these genrules serve only the data= / file-copy use case.
-genrule(
-    name = "openssl_libcrypto_so_extract",
-    srcs = [":openssl_make"],
-    outs = ["libcrypto.so.3"],
-    cmd = "set -e; found=0; for f in $(locations :openssl_make); do case $$f in *libcrypto.so.3) cp $$f $@; found=1; break;; esac; done; test $$found -eq 1 || { echo 'ERROR: libcrypto.so.3 not found in openssl_make outputs' >&2; exit 1; }",
-    visibility = ["//visibility:private"],
-)
-
-genrule(
-    name = "openssl_libssl_so_extract",
-    srcs = [":openssl_make"],
-    outs = ["libssl.so.3"],
-    cmd = "set -e; found=0; for f in $(locations :openssl_make); do case $$f in *libssl.so.3) cp $$f $@; found=1; break;; esac; done; test $$found -eq 1 || { echo 'ERROR: libssl.so.3 not found in openssl_make outputs' >&2; exit 1; }",
-    visibility = ["//visibility:private"],
-)
-
-# Single public target for all consumers that need the OpenSSL .so files as
-# data (runfiles). Mirrors the pattern used for softhsm_so.
-filegroup(
-    name = "openssl_so",
-    srcs = [
-        ":openssl_libcrypto_so_extract",
-        ":openssl_libssl_so_extract",
+# Opt-in shared library
+cc_shared_library(
+    name = "openssl_shared",
+    shared_lib_name = "libopenssl.so.3",
+    visibility = ["//visibility:public"],
+    deps = [
+        ":openssl",
+        ":openssl_make",
     ],
+)
+
+# Rust-side adapter (per rules_rust tested pattern)
+cc_import(
+    name = "openssl_shared_import",
+    shared_library = ":openssl_shared",
+    visibility = ["//visibility:public"],
+)
+
+# Single stable link alias that consumers depend on
+alias(
+    name = "openssl_link",
+    actual = select({
+        ":dynamic_openssl_enabled": ":openssl_shared_import",
+        "//conditions:default": ":openssl",
+    }),
     visibility = ["//visibility:public"],
 )
 
@@ -205,7 +227,7 @@ genrule(
     fi
     
     # 2. Extract and write the OpenSSL version dynamically (e.g., "3.6.1")
-    grep -oE 'define OPENSSL_VERSION_STR\\s+"[0-9.]+"' "$$VERSION_FILE" | awk '{print $$3}' | tr -d '"' > $@
+    grep -oE 'define OPENSSL_VERSION_STR[[:space:]]+"[0-9.]+"' "$$VERSION_FILE" | awk '{print $$3}' | tr -d '"' > $@
     
     # 3. Extract and append all active OPENSSL_NO_* feature flags as a comma-separated string
     grep -oE 'OPENSSL_NO_[A-Z0-9_]+' "$$CONF_FILE" | sort -u | paste -sd, >> $@
