@@ -203,6 +203,17 @@ alias(
     visibility = ["//visibility:public"],
 )
 
+# Allows integrating workspaces to globally override the OpenSSL implementation
+# without modifying this repository.
+# Override example (in the integrating workspace's .bazelrc):
+#   build --@score_openssl//:openssl_crypto_impl=//my/vendor/openssl:target
+label_flag(
+    name = "openssl_crypto_impl",
+    build_setting_default = ":openssl_link",
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+)
+
 # ===============================================================================
 # S I N G L E   S O U R C E   O F   T R U T H   (FFI Synchronization)
 # ===============================================================================

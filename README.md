@@ -87,7 +87,7 @@ According to [DR-002](https://eclipse-score.github.io/score/main/design_decision
 * **`:openssl` (Default)**: Static `cc_library` linking `libcrypto.a` and `libssl.a`.
 * **`:openssl_shared` (Opt-in)**: Dynamic `cc_shared_library` producing `libopenssl.so.3`.
 * **`:openssl_shared_import`**: Adapter for `rules_rust` FFI linking.
-* **`:openssl_link` (Public Switchboard)**: The primary entry point consumed by downstream projects (`@score_crates`, `score_crypto`, `score_baselibs`). It selects between static and dynamic linking based on the `use_dynamic_openssl` flag:
+* **`:openssl_link` (Public Switchboard)**: Resolves between static and dynamic linking based on the `use_dynamic_openssl` flag:
 
 ```bash
 # Default: Static linking (honors DR-002)
@@ -95,4 +95,11 @@ bazel build //...
 
 # Opt-in: Shared linking (requires alignment across all downstream modules)
 bazel build --//:use_dynamic_openssl=True //...
+```
+
+* **`:openssl_crypto_impl` (Global Override Flag)**: Central `label_flag` allowing top-level integrating workspaces (OEMs) to globally redirect the OpenSSL implementation across all downstream repositories simultaneously. Defaults to `:openssl_link`.
+
+```bash
+# Override example (e.g. in root .bazelrc):
+build --@score_openssl//:openssl_crypto_impl=//vendor/custom_openssl:target
 ```
