@@ -10,7 +10,7 @@
     "containerUser": "${localEnv:USER}",
 
     // Create empty folder in case mandatory mount points are missing.
-    "initializeCommand": "mkdir -p ${localEnv:HOME}/.cache/bazel ${localEnv:HOME}/.qnx/license",
+    "initializeCommand": "mkdir -p \"${localEnv:HOME}/.cache/bazel\" \"${localEnv:HOME}/.qnx/license\" && if [ ! -e \"${localEnv:HOME}/.netrc\" ]; then (umask 077; touch \"${localEnv:HOME}/.netrc\"); fi",
 
     "mounts": [
         {

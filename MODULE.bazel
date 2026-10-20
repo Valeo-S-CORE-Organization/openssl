@@ -1,6 +1,5 @@
 module(
     name = "score_openssl",
-    version = "3.6.1",
 )
 
 # Standard Bazel dependencies required to compile C++ via configure/make
@@ -37,6 +36,7 @@ http_archive(
 # Use preinstalled host tools to prevent bootstrapping pkgconfig under strict C11 flags
 register_toolchains(
     "@rules_foreign_cc//toolchains:preinstalled_pkgconfig_toolchain",
+    "@rules_foreign_cc//toolchains:preinstalled_m4_toolchain",
 )
 
 gcc = use_extension("@score_bazel_cpp_toolchains//extensions:gcc.bzl", "gcc", dev_dependency = True)
