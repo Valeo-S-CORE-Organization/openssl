@@ -1894,7 +1894,7 @@
     "@@score_bazel_cpp_toolchains+//extensions:gcc.bzl%gcc": {
       "general": {
         "bzlTransitiveDigest": "B8q0vqoyCF73c604BGTN8TCFKF0Ep76GQiW3O313m10=",
-        "usagesDigest": "0u95dK7VyesGyJ51ziPT7VlYynIB9LyYZHlTyVsY9BA=",
+        "usagesDigest": "6ctwYv1y88nttxu8JuLnU36oQWWdCnc2v7IQnVkbcmU=",
         "recordedInputs": [
           "REPO_MAPPING:bazel_tools,rules_cc rules_cc+",
           "REPO_MAPPING:score_bazel_cpp_toolchains+,bazel_tools bazel_tools",
