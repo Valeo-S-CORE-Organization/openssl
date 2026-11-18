@@ -31,7 +31,11 @@ _QNX_SDP_ENV_FIXUP = select({
 # https://github.com/openssl/openssl/blob/openssl-3.6.1/INSTALL.md
 configure_make(
     name = "openssl_make",
-    copts = ["-Wno-error"],
+    copts = [
+        "-Wno-error",
+        "-Wno-error=implicit-function-declaration",
+        "-D_GNU_SOURCE",
+    ],
     features = ["-warnings_as_errors", "-strict_warnings", "-minimal_warnings"],
     args = ["-j$(nproc)"],
     configure_command = "Configure",  # OpenSSL uses Configure, not configure
